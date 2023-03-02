@@ -5,8 +5,8 @@ lahman.db
 .*.s??
 
 # Ignore all maven build and test files
-target/*
-*.class
+*/target/*
+*/*.class
 
 # Eclipse
 .classpath
@@ -14,8 +14,8 @@ target/*
 .settings/
 
 # Ignore all IntelliJ IDEA files
-.idea/*
-*.iml
+*/.idea/*
+*/*.iml
 *.iws
 .attach_*
 
@@ -26,4 +26,4 @@ target/*
 # ignore submission files
 hw*.zip
 *.zip
-demo/*
+*/demo/*
