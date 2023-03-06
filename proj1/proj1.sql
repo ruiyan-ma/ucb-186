@@ -68,10 +68,10 @@ WHERE avgheight > 70;
 -- Question 2i
 
 CREATE VIEW q2i(namefirst, namelast, playerid, yearid) AS
-SELECT namefirst,
-       namelast,
+SELECT p.namefirst,
+       p.namelast,
        p.playerid,
-       yearid
+       h.yearid
 FROM people AS p,
      halloffame AS h 
 ON p.playerid = h.playerid
@@ -136,7 +136,6 @@ FROM batting
 GROUP BY playerid
 HAVING SUM(ab) > 50;
 
-
 CREATE VIEW q3ii(playerid, namefirst, namelast, lslg) AS
 SELECT p.playerid,
        p.namefirst,
@@ -183,7 +182,6 @@ SELECT MIN(salary),
 FROM salaries
 WHERE yearid = 2016;
 
-
 CREATE VIEW bindex(salary, bidx) AS
 SELECT DISTINCT salary,
                 CAST ((salary - minval) / width AS INT)
@@ -194,7 +192,6 @@ AND salary < maxval
 UNION
 SELECT maxval, 9
 FROM binfo;
-
 
 CREATE VIEW q4ii(binid, low, high, count) AS
 SELECT bidx,
@@ -246,7 +243,6 @@ WHERE (yearid = 2000
             (SELECT MAX(s2.salary)
              FROM salaries AS s2
              WHERE s2.yearid = 2001)) ;
-
 
 CREATE VIEW q4iv(playerid, namefirst, namelast, salary, yearid) AS
 SELECT p.playerid,
