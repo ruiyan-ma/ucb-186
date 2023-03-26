@@ -200,9 +200,7 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): Return a BPlusTreeIterator.
-
-        return Collections.emptyIterator();
+        return new BPlusTreeIterator();
     }
 
     /**
@@ -234,8 +232,7 @@ public class BPlusTree {
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
         // TODO(proj2): Return a BPlusTreeIterator.
-
-        return Collections.emptyIterator();
+        return new BPlusTreeIterator(key);
     }
 
     /**
@@ -433,18 +430,54 @@ public class BPlusTree {
 
     // Iterator ////////////////////////////////////////////////////////////////
     private class BPlusTreeIterator implements Iterator<RecordId> {
-        // TODO(proj2): Add whatever fields and constructors you want here.
+
+        /** RecordIds iterator of each leaf node. */
+        Iterator<RecordId> rids;
+
+        /** Next leaf node. */
+        Optional<LeafNode> nextLeaf;
+
+        /** Compare key for scan greater than or equal. */
+        Optional<DataBox> compareKey;
+
+        /** B+ tree iterator for scan all. */
+        BPlusTreeIterator() {
+            compareKey = Optional.empty();
+            nextLeaf = Optional.of(root.getLeftmostLeaf());
+        }
+
+        /** B+ tree iterator for scan greater than or equal. */
+        BPlusTreeIterator(DataBox key) {
+            compareKey = Optional.of(key);
+            nextLeaf = Optional.of(root.getLeftmostLeaf());
+        }
 
         @Override
         public boolean hasNext() {
-            // TODO(proj2): implement
+            // scan B+ tree until rids has next element
+            while (rids == null || !rids.hasNext()) {
+                // if no more next leaf node, return false
+                if (nextLeaf.isEmpty()) {
+                    return false;
+                } else {
+                    if (compareKey.isPresent()) {
+                        rids = nextLeaf.get().scanGreaterEqual(compareKey.get());
+                    } else {
+                        rids = nextLeaf.get().scanAll();
+                    }
+                    nextLeaf = nextLeaf.get().getRightSibling();
+                }
+            }
 
-            return false;
+            // now rids.hasNext() is true
+            return true;
         }
 
         @Override
         public RecordId next() {
-            // TODO(proj2): implement
+            if (hasNext()) {
+                return rids.next();
+            }
 
             throw new NoSuchElementException();
         }
