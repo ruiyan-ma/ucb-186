@@ -246,7 +246,7 @@ class InnerNode extends BPlusNode {
      * a, b, c).
      */
     static <T extends Comparable<T>> int numLessThanEqual(T x, List<T> ys) {
-        int n = 1;
+        int n = 0;
         for (T y : ys) {
             if (y.compareTo(x) <= 0) {
                 ++n;
