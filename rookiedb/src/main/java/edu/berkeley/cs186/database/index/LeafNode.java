@@ -146,24 +146,51 @@ class LeafNode extends BPlusNode {
     // See BPlusNode.get.
     @Override
     public LeafNode get(DataBox key) {
-        // TODO(proj2): implement
-
-        return null;
+        return this;
     }
 
     // See BPlusNode.getLeftmostLeaf.
     @Override
     public LeafNode getLeftmostLeaf() {
-        // TODO(proj2): implement
-
-        return null;
+        return this;
     }
 
     // See BPlusNode.put.
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
-        // TODO(proj2): implement
+        // check duplicates
+        Optional<RecordId> duplicate = getKey(key);
+        if (duplicate.isPresent()) {
+            throw new BPlusTreeException("Can not insert duplicate keys.");
+        }
 
+        // insert key and record id
+        int index = InnerNode.numLessThan(key, keys);
+        keys.add(index, key);
+        rids.add(index, rid);
+
+        // check overflow
+        int order = metadata.getOrder();
+        if (keys.size() > 2 * order) {
+            List<DataBox> nextKeys = new ArrayList<>(keys.subList(order, keys.size()));
+            List<RecordId> nextRids = new ArrayList<>(rids.subList(order, keys.size()));
+            keys.removeAll(nextKeys);
+            rids.removeAll(nextRids);
+
+            // create new leaf node
+            LeafNode nextNode = new LeafNode(metadata, bufferManager,
+                    nextKeys, nextRids, rightSibling, treeContext);
+            Long pageNum = nextNode.getPage().getPageNum();
+            nextNode.sync();
+
+            // update right sibling
+            rightSibling = Optional.of(pageNum);
+            sync();
+
+            return Optional.of(new Pair<>(nextKeys.get(0), pageNum));
+        }
+
+        sync();
         return Optional.empty();
     }
 
@@ -179,9 +206,12 @@ class LeafNode extends BPlusNode {
     // See BPlusNode.remove.
     @Override
     public void remove(DataBox key) {
-        // TODO(proj2): implement
-
-        return;
+        int index = keys.indexOf(key);
+        if (index >= 0) {
+            keys.remove(index);
+            rids.remove(index);
+            sync();
+        }
     }
 
     // Iterators ///////////////////////////////////////////////////////////////
@@ -372,12 +402,30 @@ class LeafNode extends BPlusNode {
      */
     public static LeafNode fromBytes(BPlusTreeMetadata metadata, BufferManager bufferManager,
                                      LockContext treeContext, long pageNum) {
-        // TODO(proj2): implement
         // Note: LeafNode has two constructors. To implement fromBytes be sure to
         // use the constructor that reuses an existing page instead of fetching a
         // brand new one.
 
-        return null;
+        Page page = bufferManager.fetchPage(treeContext, pageNum);
+        Buffer buf = page.getBuffer();
+
+        byte nodeType = buf.get();
+        assert(nodeType == (byte) 1);
+
+        Optional<Long> rightSibling = Optional.of(buf.getLong());
+        if (rightSibling.get() == -1L) {
+            rightSibling = Optional.empty();
+        }
+
+        List<DataBox> keys = new ArrayList<>();
+        List<RecordId> rids = new ArrayList<>();
+        int num = buf.getInt();
+        for (int i = 0; i < num; ++i) {
+            keys.add(DataBox.fromBytes(buf, metadata.getKeySchema()));
+            rids.add(RecordId.fromBytes(buf));
+        }
+
+        return new LeafNode(metadata, bufferManager, page, keys, rids, rightSibling, treeContext);
     }
 
     // Builtins ////////////////////////////////////////////////////////////////

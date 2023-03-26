@@ -88,7 +88,7 @@ public class BPlusTree {
     public BPlusTree(BufferManager bufferManager, BPlusTreeMetadata metadata, LockContext lockContext) {
         // Prevent child locks - we only lock the entire tree as a whole.
         lockContext.disableChildLocks();
-        // By default we want to read the whole tree
+        // By default, we want to read the whole tree
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.S);
 
         // Sanity checks.
@@ -145,9 +145,8 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): implement
-
-        return Optional.empty();
+        LeafNode leaf = root.get(key);
+        return leaf.getKey(key);
     }
 
     /**
@@ -253,12 +252,26 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): implement
         // Note: You should NOT update the root variable directly.
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
+        Optional<Pair<DataBox, Long>> pushUpPair = root.put(key, rid);
 
-        return;
+        if (pushUpPair.isPresent()) {
+            List<DataBox> keys = new ArrayList<>();
+            List<Long> children = new ArrayList<>();
+
+            DataBox splitKey = pushUpPair.get().getFirst();
+            keys.add(splitKey);
+
+            Long rootPageNum = root.getPage().getPageNum();
+            Long splitPageNum = pushUpPair.get().getSecond();
+            children.add(rootPageNum);
+            children.add(splitPageNum);
+
+            InnerNode newRoot = new InnerNode(metadata, bufferManager, keys, children, lockContext);
+            updateRoot(newRoot);
+        }
     }
 
     /**
@@ -308,9 +321,7 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): implement
-
-        return;
+        root.remove(key);
     }
 
     // Helpers /////////////////////////////////////////////////////////////////

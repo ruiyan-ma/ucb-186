@@ -80,32 +80,66 @@ class InnerNode extends BPlusNode {
     // See BPlusNode.get.
     @Override
     public LeafNode get(DataBox key) {
-        // TODO(proj2): implement
-
-        return null;
+        int index = numLessThanEqual(key, keys);
+        BPlusNode child = getChild(index);
+        return child.get(key);
     }
 
     // See BPlusNode.getLeftmostLeaf.
     @Override
     public LeafNode getLeftmostLeaf() {
         assert(children.size() > 0);
-        // TODO(proj2): implement
-
-        return null;
+        BPlusNode leftMost = getChild(0);
+        return leftMost.getLeftmostLeaf();
     }
 
     // See BPlusNode.put.
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
-        // TODO(proj2): implement
+        int index = numLessThanEqual(key, keys);
+        BPlusNode child = getChild(index);
+        Optional<Pair<DataBox, Long>> pushUpPair = child.put(key, rid);
 
+        // if child node does not split, return empty
+        if (pushUpPair.isEmpty()) {
+            return Optional.empty();
+        }
+
+        DataBox splitKey = pushUpPair.get().getFirst();
+        Long splitPageNum = pushUpPair.get().getSecond();
+
+        // add new key
+        keys.add(index, splitKey);
+        children.add(index + 1, splitPageNum);
+
+        // check overflow
+        int order = metadata.getOrder();
+        if (keys.size() > 2 * order) {
+            // push up key should be the middle one, and we have (2 * order + 1) keys
+            DataBox pushUpKey = keys.remove(order);
+
+            List<DataBox> nextKeys = new ArrayList<>(keys.subList(order, keys.size()));
+            List<Long> nextChildren = new ArrayList<>(children.subList(order + 1, children.size()));
+            keys.removeAll(nextKeys);
+            children.removeAll(nextChildren);
+            sync();
+
+            // create new inner node
+            InnerNode nextNode = new InnerNode(metadata, bufferManager,
+                    nextKeys, nextChildren, treeContext);
+            Long pageNum = nextNode.getPage().getPageNum();
+            nextNode.sync();
+
+            return Optional.of(new Pair<>(pushUpKey, pageNum));
+        }
+
+        sync();
         return Optional.empty();
     }
 
     // See BPlusNode.bulkLoad.
     @Override
-    public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
-            float fillFactor) {
+    public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data, float fillFactor) {
         // TODO(proj2): implement
 
         return Optional.empty();
@@ -114,9 +148,8 @@ class InnerNode extends BPlusNode {
     // See BPlusNode.remove.
     @Override
     public void remove(DataBox key) {
-        // TODO(proj2): implement
-
-        return;
+        LeafNode leaf = get(key);
+        leaf.remove(key);
     }
 
     // Helpers /////////////////////////////////////////////////////////////////
@@ -213,7 +246,7 @@ class InnerNode extends BPlusNode {
      * a, b, c).
      */
     static <T extends Comparable<T>> int numLessThanEqual(T x, List<T> ys) {
-        int n = 0;
+        int n = 1;
         for (T y : ys) {
             if (y.compareTo(x) <= 0) {
                 ++n;
