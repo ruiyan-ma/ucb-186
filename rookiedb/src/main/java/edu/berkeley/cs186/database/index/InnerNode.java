@@ -112,37 +112,60 @@ class InnerNode extends BPlusNode {
         keys.add(index, splitKey);
         children.add(index + 1, splitPageNum);
 
-        // check overflow
+        // if inner node is not full, return empty
         int order = metadata.getOrder();
-        if (keys.size() > 2 * order) {
-            // push up key should be the middle one, and we have (2 * order + 1) keys
-            DataBox pushUpKey = keys.remove(order);
-
-            List<DataBox> nextKeys = new ArrayList<>(keys.subList(order, keys.size()));
-            List<Long> nextChildren = new ArrayList<>(children.subList(order + 1, children.size()));
-            keys.removeAll(nextKeys);
-            children.removeAll(nextChildren);
+        if (keys.size() <= 2 * order) {
             sync();
-
-            // create new inner node
-            InnerNode nextNode = new InnerNode(metadata, bufferManager,
-                    nextKeys, nextChildren, treeContext);
-            Long pageNum = nextNode.getPage().getPageNum();
-            nextNode.sync();
-
-            return Optional.of(new Pair<>(pushUpKey, pageNum));
+            return Optional.empty();
         }
 
-        sync();
-        return Optional.empty();
+        return splitNode(order);
     }
 
     // See BPlusNode.bulkLoad.
     @Override
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data, float fillFactor) {
-        // TODO(proj2): implement
+        // Inner nodes should repeatedly try to bulk load the rightmost child
+        // until either the inner node is full (in which case it should split)
+        // or there is no more data.
 
-        return Optional.empty();
+        int order = metadata.getOrder();
+        while (data.hasNext() && keys.size() <= 2 * order) {
+            BPlusNode rightMost = getChild(keys.size());
+            Optional<Pair<DataBox, Long>> pushUpPair = rightMost.bulkLoad(data, fillFactor);
+
+            // if right most child split, add new key
+            if (pushUpPair.isPresent()) {
+                keys.add(pushUpPair.get().getFirst());
+                children.add(pushUpPair.get().getSecond());
+            }
+        }
+
+        // if inner node is not full, return empty
+        if (keys.size() <= 2 * order) {
+            sync();
+            return Optional.empty();
+        }
+
+        return splitNode(order);
+    }
+
+    private Optional<Pair<DataBox, Long>> splitNode(int order) {
+        // push up key should be the middle one, and we have (2 * order + 1) keys
+        DataBox pushUpKey = keys.remove(order);
+
+        List<DataBox> nextKeys = new ArrayList<>(keys.subList(order, keys.size()));
+        List<Long> nextChildren = new ArrayList<>(children.subList(order + 1, children.size()));
+        keys.removeAll(nextKeys);
+        children.removeAll(nextChildren);
+        sync();
+
+        // create new inner node
+        InnerNode nextNode = new InnerNode(metadata, bufferManager, nextKeys, nextChildren, treeContext);
+        Long pageNum = nextNode.getPage().getPageNum();
+        nextNode.sync();
+
+        return Optional.of(new Pair<>(pushUpKey, pageNum));
     }
 
     // See BPlusNode.remove.

@@ -253,22 +253,7 @@ public class BPlusTree {
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
         Optional<Pair<DataBox, Long>> pushUpPair = root.put(key, rid);
-
-        if (pushUpPair.isPresent()) {
-            List<DataBox> keys = new ArrayList<>();
-            List<Long> children = new ArrayList<>();
-
-            DataBox splitKey = pushUpPair.get().getFirst();
-            keys.add(splitKey);
-
-            Long rootPageNum = root.getPage().getPageNum();
-            Long splitPageNum = pushUpPair.get().getSecond();
-            children.add(rootPageNum);
-            children.add(splitPageNum);
-
-            InnerNode newRoot = new InnerNode(metadata, bufferManager, keys, children, lockContext);
-            updateRoot(newRoot);
-        }
+        pushUpPair.ifPresent(this::splitRoot);
     }
 
     /**
@@ -280,11 +265,11 @@ public class BPlusTree {
      * be filled up to full and split in half exactly like in put.
      *
      * This method should raise an exception if the tree is not empty at time
-     * of bulk loading. Bulk loading is used when creating a new Index, so think 
-     * about what an "empty" tree should look like. If data does not meet the 
-     * preconditions (contains duplicates or not in order), the resulting 
-     * behavior is undefined. Undefined behavior means you can handle these 
-     * cases however you want (or not at all) and you are not required to 
+     * of bulk loading. Bulk loading is used when creating a new Index, so think
+     * about what an "empty" tree should look like. If data does not meet the
+     * preconditions (contains duplicates or not in order), the resulting
+     * behavior is undefined. Undefined behavior means you can handle these
+     * cases however you want (or not at all) and you are not required to
      * write any explicit checks.
      *
      * The behavior of this method should be similar to that of InnerNode's
@@ -294,12 +279,30 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): implement
         // Note: You should NOT update the root variable directly.
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
+        while (data.hasNext()) {
+            Optional<Pair<DataBox, Long>> pushUpPair = root.bulkLoad(data, fillFactor);
+            pushUpPair.ifPresent(this::splitRoot);
+        }
+    }
 
-        return;
+    /** Split root. */
+    private void splitRoot(Pair<DataBox, Long> entry) {
+        List<DataBox> keys = new ArrayList<>();
+        List<Long> children = new ArrayList<>();
+
+        DataBox splitKey = entry.getFirst();
+        keys.add(splitKey);
+
+        Long rootPageNum = root.getPage().getPageNum();
+        Long splitPageNum = entry.getSecond();
+        children.add(rootPageNum);
+        children.add(splitPageNum);
+
+        InnerNode newRoot = new InnerNode(metadata, bufferManager, keys, children, lockContext);
+        updateRoot(newRoot);
     }
 
     /**

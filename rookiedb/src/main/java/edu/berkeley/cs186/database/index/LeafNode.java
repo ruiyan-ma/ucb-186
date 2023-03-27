@@ -169,38 +169,53 @@ class LeafNode extends BPlusNode {
         keys.add(index, key);
         rids.add(index, rid);
 
-        // check overflow
+        // if leaf node is not full, return empty
         int order = metadata.getOrder();
-        if (keys.size() > 2 * order) {
-            List<DataBox> nextKeys = new ArrayList<>(keys.subList(order, keys.size()));
-            List<RecordId> nextRids = new ArrayList<>(rids.subList(order, keys.size()));
-            keys.removeAll(nextKeys);
-            rids.removeAll(nextRids);
-
-            // create new leaf node
-            LeafNode nextNode = new LeafNode(metadata, bufferManager,
-                    nextKeys, nextRids, rightSibling, treeContext);
-            Long pageNum = nextNode.getPage().getPageNum();
-            nextNode.sync();
-
-            // update right sibling
-            rightSibling = Optional.of(pageNum);
+        if (keys.size() <= 2 * order) {
             sync();
-
-            return Optional.of(new Pair<>(nextKeys.get(0), pageNum));
+            return Optional.empty();
         }
 
-        sync();
-        return Optional.empty();
+        return splitNode(order);
     }
 
     // See BPlusNode.bulkLoad.
     @Override
-    public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
-            float fillFactor) {
-        // TODO(proj2): implement
+    public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data, float fillFactor) {
+        // fill up leaf node
+        int maxSize = Math.round(metadata.getOrder() * 2 * fillFactor);
+        while (data.hasNext() && keys.size() <= maxSize) {
+            Pair<DataBox, RecordId> entry = data.next();
+            keys.add(entry.getFirst());
+            rids.add(entry.getSecond());
+        }
 
-        return Optional.empty();
+        // if leaf node is not full, return empty
+        if (keys.size() <= maxSize) {
+            sync();
+            return Optional.empty();
+        }
+
+        return splitNode(maxSize);
+    }
+
+    private Optional<Pair<DataBox, Long>> splitNode(int order) {
+        List<DataBox> nextKeys = new ArrayList<>(keys.subList(order, keys.size()));
+        List<RecordId> nextRids = new ArrayList<>(rids.subList(order, keys.size()));
+        keys.removeAll(nextKeys);
+        rids.removeAll(nextRids);
+
+        // create new leaf node
+        LeafNode nextNode = new LeafNode(metadata, bufferManager,
+                nextKeys, nextRids, rightSibling, treeContext);
+        nextNode.sync();
+
+        // update right sibling
+        Long pageNum = nextNode.getPage().getPageNum();
+        rightSibling = Optional.of(pageNum);
+        sync();
+
+        return Optional.of(new Pair<>(nextKeys.get(0), pageNum));
     }
 
     // See BPlusNode.remove.
