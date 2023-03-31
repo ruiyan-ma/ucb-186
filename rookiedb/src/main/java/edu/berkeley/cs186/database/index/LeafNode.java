@@ -159,8 +159,7 @@ class LeafNode extends BPlusNode {
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
         // check duplicates
-        Optional<RecordId> duplicate = getKey(key);
-        if (duplicate.isPresent()) {
+        if (keys.contains(key)) {
             throw new BPlusTreeException("Can not insert duplicate keys.");
         }
 
@@ -182,8 +181,13 @@ class LeafNode extends BPlusNode {
     // See BPlusNode.bulkLoad.
     @Override
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data, float fillFactor) {
+        // check fill factor
+        if (fillFactor < 0 || fillFactor > 1) {
+            throw new BPlusTreeException("Fill factor should be between 0 and 1.");
+        }
+
         // fill up leaf node
-        int maxSize = Math.round(metadata.getOrder() * 2 * fillFactor);
+        int maxSize = (int) Math.ceil(metadata.getOrder() * 2 * fillFactor);
         while (data.hasNext() && keys.size() <= maxSize) {
             Pair<DataBox, RecordId> entry = data.next();
             keys.add(entry.getFirst());
@@ -202,8 +206,8 @@ class LeafNode extends BPlusNode {
     private Optional<Pair<DataBox, Long>> splitNode(int order) {
         List<DataBox> nextKeys = new ArrayList<>(keys.subList(order, keys.size()));
         List<RecordId> nextRids = new ArrayList<>(rids.subList(order, keys.size()));
-        keys.removeAll(nextKeys);
-        rids.removeAll(nextRids);
+        keys = new ArrayList<>(keys.subList(0, order));
+        rids = new ArrayList<>(rids.subList(0, order));
 
         // create new leaf node
         LeafNode nextNode = new LeafNode(metadata, bufferManager,
@@ -227,6 +231,11 @@ class LeafNode extends BPlusNode {
             rids.remove(index);
             sync();
         }
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return keys.size() == 0;
     }
 
     // Iterators ///////////////////////////////////////////////////////////////

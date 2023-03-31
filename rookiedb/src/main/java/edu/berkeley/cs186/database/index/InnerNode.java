@@ -88,7 +88,6 @@ class InnerNode extends BPlusNode {
     // See BPlusNode.getLeftmostLeaf.
     @Override
     public LeafNode getLeftmostLeaf() {
-        assert(children.size() > 0);
         BPlusNode leftMost = getChild(0);
         return leftMost.getLeftmostLeaf();
     }
@@ -131,7 +130,7 @@ class InnerNode extends BPlusNode {
 
         int order = metadata.getOrder();
         while (data.hasNext() && keys.size() <= 2 * order) {
-            BPlusNode rightMost = getChild(keys.size());
+            BPlusNode rightMost = getChild(children.size() - 1);
             Optional<Pair<DataBox, Long>> pushUpPair = rightMost.bulkLoad(data, fillFactor);
 
             // if right most child split, add new key
@@ -156,8 +155,8 @@ class InnerNode extends BPlusNode {
 
         List<DataBox> nextKeys = new ArrayList<>(keys.subList(order, keys.size()));
         List<Long> nextChildren = new ArrayList<>(children.subList(order + 1, children.size()));
-        keys.removeAll(nextKeys);
-        children.removeAll(nextChildren);
+        keys = new ArrayList<>(keys.subList(0, order));
+        children = new ArrayList<>(children.subList(0, order + 1));
         sync();
 
         // create new inner node
@@ -173,6 +172,11 @@ class InnerNode extends BPlusNode {
     public void remove(DataBox key) {
         LeafNode leaf = get(key);
         leaf.remove(key);
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return keys.size() == 0;
     }
 
     // Helpers /////////////////////////////////////////////////////////////////

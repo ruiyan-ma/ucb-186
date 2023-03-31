@@ -231,7 +231,6 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): Return a BPlusTreeIterator.
         return new BPlusTreeIterator(key);
     }
 
@@ -282,6 +281,12 @@ public class BPlusTree {
         // Note: You should NOT update the root variable directly.
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
+
+        // check if the tree is empty
+        if (!root.isEmpty()) {
+            throw new BPlusTreeException("Tree is not empty when bulk loading.");
+        }
+
         while (data.hasNext()) {
             Optional<Pair<DataBox, Long>> pushUpPair = root.bulkLoad(data, fillFactor);
             pushUpPair.ifPresent(this::splitRoot);

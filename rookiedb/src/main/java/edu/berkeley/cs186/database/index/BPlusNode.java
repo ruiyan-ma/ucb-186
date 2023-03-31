@@ -213,6 +213,11 @@ abstract class BPlusNode {
      */
     public abstract void remove(DataBox key);
 
+    /**
+     * Check whether this node is empty.
+     */
+    public abstract boolean isEmpty();
+
     // Helpers /////////////////////////////////////////////////////////////////
     /** Get the page on which this node is persisted. */
     abstract Page getPage();
