@@ -86,15 +86,16 @@ public class SortOperator extends QueryOperator {
      * iterator
      */
     public Run sortRun(Iterator<Record> records) {
-        // TODO(proj3_part1): implement
-        return null;
+        List<Record> recordList = new ArrayList<>();
+        records.forEachRemaining(recordList::add);
+        recordList.sort(comparator);
+        return makeRun(recordList);
     }
 
     /**
      * Given a list of sorted runs, returns a new run that is the result of
      * merging the input runs. You should use a Priority Queue (java.util.PriorityQueue)
-     * to determine which record should be should be added to the output run
-     * next.
+     * to determine which record should be added to the output run next.
      *
      * You are NOT allowed to have more than runs.size() records in your
      * priority queue at a given moment. It is recommended that your Priority
@@ -107,8 +108,37 @@ public class SortOperator extends QueryOperator {
      */
     public Run mergeSortedRuns(List<Run> runs) {
         assert (runs.size() <= this.numBuffers - 1);
-        // TODO(proj3_part1): implement
-        return null;
+
+        Run result = makeRun();
+        Queue<Pair<Record, Integer>> queue = new PriorityQueue<>(new RecordPairComparator());
+
+        // create iterator for each run
+        List<Iterator<Record>> iterators = new ArrayList<>();
+        for (Run run : runs) {
+            iterators.add(run.iterator());
+        }
+
+        // add records from each iterator
+        for (int i = 0; i < iterators.size(); ++i) {
+            Iterator<Record> iterator = iterators.get(i);
+            if (iterator.hasNext()) {
+                queue.add(new Pair<>(iterator.next(), i));
+            }
+        }
+
+        // find the smallest record and add it to result
+        while (!queue.isEmpty()) {
+            Pair<Record, Integer> smallest = queue.poll();
+            result.add(smallest.getFirst());
+            // add new record from the corresponding iterator
+            int index = smallest.getSecond();
+            Iterator<Record> iterator = iterators.get(index);
+            if (iterator.hasNext()) {
+                queue.add(new Pair<>(iterator.next(), index));
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -132,8 +162,12 @@ public class SortOperator extends QueryOperator {
      * @return a list of sorted runs obtained by merging the input runs
      */
     public List<Run> mergePass(List<Run> runs) {
-        // TODO(proj3_part1): implement
-        return Collections.emptyList();
+        List<Run> result = new ArrayList<>();
+        for (int i = 0; i < runs.size(); i += numBuffers - 1) {
+            int endIndex = Math.min(i + numBuffers - 1, runs.size());
+            result.add(mergeSortedRuns(runs.subList(i, endIndex)));
+        }
+        return result;
     }
 
     /**
@@ -141,15 +175,27 @@ public class SortOperator extends QueryOperator {
      * You may find the getBlockIterator method of the QueryOperator class useful
      * here to create your initial set of sorted runs.
      *
-     * @return a single run containing all of the source operator's records in
-     * sorted order.
+     * @return a single run containing all the source operator's records in sorted order.
      */
     public Run sort() {
         // Iterator over the records of the relation we want to sort
         Iterator<Record> sourceIterator = getSource().iterator();
 
-        // TODO(proj3_part1): implement
-        return makeRun(); // TODO(proj3_part1): replace this!
+        List<Run> sortedRuns = new ArrayList<>();
+
+        // pass 0: sort runs
+        while (sourceIterator.hasNext()) {
+            Iterator<Record> blockIterator = QueryOperator.getBlockIterator(
+                    sourceIterator, getSchema(), numBuffers);
+            sortedRuns.add(sortRun(blockIterator));
+        }
+
+        // pass 1 to N: merge sorted runs
+        while (sortedRuns.size() > 1) {
+            sortedRuns = mergePass(sortedRuns);
+        }
+
+        return sortedRuns.get(0);
     }
 
     /**

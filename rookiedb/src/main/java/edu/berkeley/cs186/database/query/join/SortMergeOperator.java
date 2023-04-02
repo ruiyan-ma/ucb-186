@@ -139,8 +139,58 @@ public class SortMergeOperator extends JoinOperator {
          * or null if there are no more records to join.
          */
         private Record fetchNextRecord() {
-            // TODO(proj3_part1): implement
-            return null;
+            if (leftRecord == null) {
+                return null;
+            }
+
+            if (rightRecord == null && !marked) {
+                return null;
+            }
+
+            while (true) {
+                if (!marked) {
+                    // search for matching records
+                    while (compare(leftRecord, rightRecord) < 0) {
+                        if (!leftIterator.hasNext()) {
+                            leftRecord = null;
+                            return null;
+                        }
+                        leftRecord = leftIterator.next();
+                    }
+
+                    while (compare(leftRecord, rightRecord) > 0) {
+                        if (!rightIterator.hasNext()) {
+                            rightRecord = null;
+                            return null;
+                        }
+                        rightRecord = rightIterator.next();
+                    }
+
+                    rightIterator.markPrev();
+                    marked = true;
+                }
+
+                // if we are here, then we have a mark
+                if (rightRecord != null && compare(leftRecord, rightRecord) == 0) {
+                    Record result = leftRecord.concat(rightRecord);
+                    rightRecord = rightIterator.hasNext() ? rightIterator.next() : null;
+                    return result;
+                } else {
+                    // reset right record to mark
+                    rightIterator.reset();
+                    rightRecord = rightIterator.next();
+
+                    // advance left record
+                    if (!leftIterator.hasNext()) {
+                        leftRecord = null;
+                        return null;
+                    }
+                    leftRecord = leftIterator.next();
+
+                    // remove mark
+                    marked = false;
+                }
+            }
         }
 
         @Override
