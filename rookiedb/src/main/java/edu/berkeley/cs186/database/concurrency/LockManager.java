@@ -73,30 +73,20 @@ public class LockManager {
          * lock.
          */
         public void grantOrUpdateLock(Lock lock) {
-            // TODO(proj4_part1): An acquire-and-release that releases an old lock on `name`
-            //  should NOT change the acquisition time of the lock on `name`, i.e. if a
-            //  transaction acquired locks in the order: S(A), X(B), acquire X(A) and release
-            //  S(A), the lock on A is considered to have been acquired before the lock on B.
-
             long transNum = lock.transactionNum;
-            transactionLocks.putIfAbsent(transNum, new ArrayList<>());
-            List<Lock> transLocks = transactionLocks.get(transNum);
 
-            Lock oldLock = null;
+            // update lock if the transaction already has a lock
             for (Lock prevLock : locks) {
                 if (prevLock.transactionNum.equals(transNum)) {
-                    oldLock = prevLock;
-                    break;
+                    prevLock.lockType = lock.lockType;
+                    return;
                 }
             }
 
-            if (oldLock != null) {
-                locks.remove(oldLock);
-                transLocks.remove(oldLock);
-            }
-
+            // give the transaction a new lock
             locks.add(lock);
-            transLocks.add(lock);
+            transactionLocks.putIfAbsent(transNum, new ArrayList<>());
+            transactionLocks.get(transNum).add(lock);
         }
 
         /**
@@ -271,6 +261,8 @@ public class LockManager {
             List<Lock> releaseLocks = new ArrayList<>();
             Set<ResourceName> resourceSet = new HashSet<>(releaseNames);
             for (Lock lock : getLocks(transaction)) {
+                // skip the lock on the target resource
+                if (lock.name.equals(name)) continue;
                 if (resourceSet.contains(lock.name)) {
                     releaseLocks.add(lock);
                 }
