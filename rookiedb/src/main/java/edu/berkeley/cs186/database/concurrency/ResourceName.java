@@ -14,8 +14,8 @@ import java.util.List;
  * "someTable" is the name of the table the page belongs to, and 10 is the page
  * number. We store this as the list ["database", "someTable", "10"] and its
  * ancestors on the hierarchy would be ["database"] (which represents the entire
- * database), and ["database", "someTable"] (which represents the the table,
- * of which this is a page of).
+ * database), and ["database", "someTable"] (which represents the table, of which
+ * this is a page of).
  */
 public class ResourceName {
     private final List<String> names;
