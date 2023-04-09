@@ -177,46 +177,45 @@ public class LockManager {
     /**
      * Throw exception if a lock on `name` is already held by `transaction`.
      */
-    private void checkDuplicateLockRequest(TransactionContext transaction,
+    private void checkDuplicateLockRequest(String methodName, TransactionContext transaction,
                                            ResourceName name) {
-        checkDuplicateLockRequest(transaction, name, Collections.emptyList());
+        checkDuplicateLockRequest(methodName, transaction, name, Collections.emptyList());
     }
 
     /**
      * Throw exception if a lock on `name` is already held by `transaction`.
      */
-    private void checkDuplicateLockRequest(TransactionContext transaction,
-                                           ResourceName name,
-                                           List<ResourceName> releaseNames) {
-        if (getLockType(transaction, name) != LockType.NL
-                && !releaseNames.contains(name)) {
+    private void checkDuplicateLockRequest(String methodName, TransactionContext transaction,
+                                           ResourceName name, List<ResourceName> releaseNames) {
+        LockType currLock = getLockType(transaction, name);
+        if (currLock != LockType.NL && !releaseNames.contains(name)) {
             throw new DuplicateLockRequestException(String.format(
-                    "Transaction %d already has a lock on %s.",
-                    transaction.getTransNum(), name));
+                    "%s: Transaction %d wants to acquire an lock on %s, but it already has a %s lock.",
+                    methodName, transaction.getTransNum(), name, currLock));
         }
     }
 
     /**
      * Throw exception if a `type` lock on `name` is already held by `transaction`.
      */
-    public void checkDuplicateLockRequest(TransactionContext transaction,
-                                           ResourceName name,
-                                           LockType type) {
-        if (getLockType(transaction, name) == type) {
+    public void checkDuplicateLockRequest(String methodName, TransactionContext transaction,
+                                           ResourceName name, LockType newLockType) {
+        LockType currLock = getLockType(transaction, name);
+        if (currLock == newLockType) {
             throw new DuplicateLockRequestException(String.format(
-                    "Transaction %d already has a lock on %s.",
-                    transaction.getTransNum(), name));
+                    "%s: transaction %d wants to get a %s lock on %s, but it already has a %s lock.",
+                    methodName, transaction.getTransNum(), newLockType, name, currLock));
         }
     }
 
     /**
      * Throw exception if `transaction` doesn't hold a lock on `name`.
      */
-    public void checkNoLockHeld(TransactionContext transaction, ResourceName name) {
+    public void checkNoLockHeld(String methodName, TransactionContext transaction, ResourceName name) {
         if (getLockType(transaction, name).equals(LockType.NL)) {
             throw new NoLockHeldException(String.format(
-                    "Transaction %d does not hold a lock on %s.",
-                    transaction.getTransNum(), name));
+                    "%s: transaction %d does not have a lock on %s.",
+                    methodName, transaction.getTransNum(), name));
         }
     }
 
@@ -226,13 +225,15 @@ public class LockManager {
      * A promotion from lock type A to lock type B is valid if and only if B is
      * substitutable for A, and B is not equal to A.
      */
-    public void checkValidPromotion(TransactionContext transaction,
+    public void checkValidPromotion(String methodName, TransactionContext transaction,
                                      ResourceName name, LockType newLockType) {
-        LockType required = getLockType(transaction, name);
-        if (newLockType == required || !LockType.substitutable(newLockType, required)) {
+        LockType currLock = getLockType(transaction, name);
+        if (newLockType == currLock || !LockType.substitutable(newLockType, currLock)) {
             throw new InvalidLockException(String.format(
-                    "Lock %s is not substitutable for %s.",
-                    newLockType, required));
+                    "%s: transaction %d wants to get a %s lock on %s, but it already has " +
+                            "a %s lock and %s lock is not substitutable for %s lock.",
+                    methodName, transaction.getTransNum(), newLockType, name,
+                    currLock, newLockType, currLock));
         }
     }
 
@@ -263,11 +264,12 @@ public class LockManager {
                                   LockType lockType, List<ResourceName> releaseNames)
             throws DuplicateLockRequestException, NoLockHeldException {
         boolean shouldBlock = false;
+        String methodName = "LockManager#acquireAndRelease";
 
         synchronized (this) {
-            checkDuplicateLockRequest(transaction, name, releaseNames);
+            checkDuplicateLockRequest(methodName, transaction, name, releaseNames);
             for (ResourceName releaseName : releaseNames) {
-                checkNoLockHeld(transaction, releaseName);
+                checkNoLockHeld(methodName, transaction, releaseName);
             }
 
             long transNum = transaction.getTransNum();
@@ -320,9 +322,10 @@ public class LockManager {
     public void acquire(TransactionContext transaction, ResourceName name,
                         LockType lockType) throws DuplicateLockRequestException {
         boolean shouldBlock = false;
+        String methodName = "LockManager#acquire";
 
         synchronized (this) {
-            checkDuplicateLockRequest(transaction, name);
+            checkDuplicateLockRequest(methodName, transaction, name);
 
             long transNum = transaction.getTransNum();
             ResourceEntry resource = getResourceEntry(name);
@@ -359,8 +362,10 @@ public class LockManager {
      */
     public void release(TransactionContext transaction, ResourceName name)
             throws NoLockHeldException {
+        String methodName = "LockManager#release";
+
         synchronized (this) {
-            checkNoLockHeld(transaction, name);
+            checkNoLockHeld(methodName, transaction, name);
             for (Lock lock : getLocks(transaction)) {
                 if (lock.name.equals(name)) {
                     getResourceEntry(name).releaseLock(lock);
@@ -397,11 +402,12 @@ public class LockManager {
                         LockType newLockType)
             throws DuplicateLockRequestException, NoLockHeldException, InvalidLockException {
         boolean shouldBlock = false;
+        String methodName = "LockManager#promote";
 
         synchronized (this) {
-            checkDuplicateLockRequest(transaction, name, newLockType);
-            checkNoLockHeld(transaction, name);
-            checkValidPromotion(transaction, name, newLockType);
+            checkDuplicateLockRequest(methodName, transaction, name, newLockType);
+            checkNoLockHeld(methodName, transaction, name);
+            checkValidPromotion(methodName, transaction, name, newLockType);
 
             long transNum = transaction.getTransNum();
             ResourceEntry resource = getResourceEntry(name);

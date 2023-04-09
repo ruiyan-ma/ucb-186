@@ -96,13 +96,13 @@ public class LockContext {
     /**
      * Throw exception if the parent lock of this context cannot grant `childType` lock.
      */
-    private void checkParentLock(TransactionContext transaction, LockType childType) {
+    private void checkParentLock(String methodName, TransactionContext transaction, LockType childType) {
         if (name.parent() != null) {
             LockType parentType = lockMgr.getLockType(transaction, name.parent());
             if (!LockType.canBeParentLock(parentType, childType)) {
                 throw new InvalidLockException(String.format(
-                        "Transaction %d wants %s lock on %s but its parent has %s lock.",
-                        transaction.getTransNum(), childType, name, parentType));
+                        "%s: transaction %d wants %s lock on %s but its parent has %s lock.",
+                        methodName, transaction.getTransNum(), childType, name, parentType));
             }
         }
     }
@@ -110,10 +110,10 @@ public class LockContext {
     /**
      * Throw exception if this context is read only.
      */
-    private void checkReadOnly() {
+    private void checkReadOnly(String methodName) {
         if (readonly) {
-            throw new UnsupportedOperationException(
-                    String.format("%s is read only.", this));
+            throw new UnsupportedOperationException(String.format(
+                    "%s: %s is read only.", methodName, this));
         }
     }
 
@@ -129,8 +129,10 @@ public class LockContext {
      */
     public void acquire(TransactionContext transaction, LockType lockType)
             throws InvalidLockException, DuplicateLockRequestException {
-        checkReadOnly();
-        checkParentLock(transaction, lockType);
+        String methodName = "LockContext#acquire";
+        checkReadOnly(methodName);
+        checkParentLock(methodName, transaction, lockType);
+
         if (hasSIXAncestor(transaction) && (lockType == LockType.S || lockType == LockType.IS)) {
             throw new InvalidLockException(String.format(
                     "Transaction %d acquires an %s lock on %s but an ancestor has SIX.",
@@ -154,7 +156,9 @@ public class LockContext {
      */
     public void release(TransactionContext transaction)
             throws NoLockHeldException, InvalidLockException {
-        checkReadOnly();
+        String methodName = "LockContext#release";
+        checkReadOnly(methodName);
+
         if (getNumChildren(transaction) != 0) {
             throw new InvalidLockException(String.format(
                     "Transaction %d wants to release lock on %s but has child lock.",
@@ -186,11 +190,12 @@ public class LockContext {
      */
     public void promote(TransactionContext transaction, LockType newLockType)
             throws DuplicateLockRequestException, NoLockHeldException, InvalidLockException {
-        checkReadOnly();
-        checkParentLock(transaction, newLockType);
-        lockMgr.checkDuplicateLockRequest(transaction, name, newLockType);
-        lockMgr.checkNoLockHeld(transaction, name);
-        lockMgr.checkValidPromotion(transaction, name, newLockType);
+        String methodName = "LockContext#promote";
+        checkReadOnly(methodName);
+        checkParentLock(methodName, transaction, newLockType);
+        lockMgr.checkDuplicateLockRequest(methodName, transaction, name, newLockType);
+        lockMgr.checkNoLockHeld(methodName, transaction, name);
+        lockMgr.checkValidPromotion(methodName, transaction, name, newLockType);
 
         if (newLockType != LockType.SIX) {
             lockMgr.promote(transaction, name, newLockType);
@@ -250,8 +255,9 @@ public class LockContext {
      * @throws UnsupportedOperationException if context is readonly
      */
     public void escalate(TransactionContext transaction) throws NoLockHeldException {
-        checkReadOnly();
-        lockMgr.checkNoLockHeld(transaction, name);
+        String methodName = "LockContext#escalate";
+        checkReadOnly(methodName);
+        lockMgr.checkNoLockHeld(methodName, transaction, name);
 
         LockType currLock = lockMgr.getLockType(transaction, name);
         if (currLock == LockType.S || currLock == LockType.X) return;

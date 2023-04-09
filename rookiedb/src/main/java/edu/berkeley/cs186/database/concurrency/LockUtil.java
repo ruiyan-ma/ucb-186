@@ -38,16 +38,17 @@ public class LockUtil {
         if (transaction == null || lockContext == null) return;
 
         // do nothing if the current lock type can substitute the requested type
-        LockType currLock = lockContext.getEffectiveLockType(transaction);
-        if (LockType.substitutable(currLock, requestType)) return;
+        LockType effectiveLock = lockContext.getEffectiveLockType(transaction);
+        if (LockType.substitutable(effectiveLock, requestType)) return;
 
-        if (currLock == LockType.IX && requestType == LockType.S) {
+        LockType explicitLock = lockContext.getExplicitLockType(transaction);
+        if (explicitLock == LockType.IX && requestType == LockType.S) {
             lockContext.promote(transaction, LockType.SIX);
-        } else if (currLock.isIntent()) {
+        } else if (explicitLock.isIntent()) {
             // first escalate lock, then promote if not substitutable
             lockContext.escalate(transaction);
-            currLock = lockContext.getExplicitLockType(transaction);
-            if (!LockType.substitutable(currLock, requestType)) {
+            explicitLock = lockContext.getExplicitLockType(transaction);
+            if (!LockType.substitutable(explicitLock, requestType)) {
                 lockContext.promote(transaction, requestType);
             }
         } else {
@@ -56,7 +57,7 @@ public class LockUtil {
                     LockType.parentLock(requestType));
 
             // acquire or promote lock for this context
-            if (currLock == LockType.NL) {
+            if (explicitLock == LockType.NL) {
                 lockContext.acquire(transaction, requestType);
             } else {
                 lockContext.promote(transaction, requestType);
@@ -86,8 +87,14 @@ public class LockUtil {
             // acquire or promote lock for parent
             if (currLock == LockType.NL) {
                 parent.acquire(transaction, required);
-            } else {
+            } else if (currLock.isIntent()) {
                 parent.promote(transaction, required);
+            } else {
+                // currLock == S and required == IS --> redundant
+                // currLock == S and required == IX --> promote to SIX
+                // currLock == X and required == IS --> redundant
+                // currLock == X and required == IX --> redundant
+                parent.promote(transaction, LockType.SIX);
             }
         }
     }

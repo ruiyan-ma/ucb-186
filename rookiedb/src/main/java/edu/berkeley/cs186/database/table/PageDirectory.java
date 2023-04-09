@@ -21,7 +21,7 @@ import java.util.Random;
  * An implementation of a heap file, using a page directory. Assumes data pages are packed (but record
  * lengths do not need to be fixed-length).
  *
- * Header pages are layed out as follows:
+ * Header pages are laid out as follows:
  * - first byte: 0x1 to indicate valid allocated page
  * - next 4 bytes: page directory id
  * - next 8 bytes: page number of next header page, or -1 (0xFFFFFFFFFFFFFFFF) if no next header page.
@@ -106,7 +106,7 @@ public class PageDirectory implements BacktrackingIterable<Page> {
 
     public Page getPageWithSpace(short requiredSpace) {
         if (requiredSpace <= 0) {
-            throw new IllegalArgumentException("cannot request nonpositive amount of space");
+            throw new IllegalArgumentException("cannot request non-positive amount of space");
         }
         if (requiredSpace > EFFECTIVE_PAGE_SIZE - emptyPageMetadataSize) {
             throw new IllegalArgumentException("requesting page with more space than the size of the page");
@@ -114,8 +114,7 @@ public class PageDirectory implements BacktrackingIterable<Page> {
 
         Page page = this.firstHeader.loadPageWithSpace(requiredSpace);
         LockContext pageContext = lockContext.childContext(page.getPageNum());
-        // TODO(proj4_part2): Update the following line
-        LockUtil.ensureSufficientLockHeld(pageContext, LockType.NL);
+        LockUtil.ensureSufficientLockHeld(pageContext, LockType.X);
 
         return new DataPage(pageDirectoryId, page);
     }
