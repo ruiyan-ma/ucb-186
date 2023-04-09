@@ -56,9 +56,8 @@ public class ResourceName {
             return false;
         }
         Iterator<String> mine = names.iterator();
-        Iterator<String> others = other.names.iterator();
-        while (others.hasNext()) {
-            if (!mine.next().equals(others.next())) {
+        for (String name : other.names) {
+            if (!mine.next().equals(name)) {
                 return false;
             }
         }
