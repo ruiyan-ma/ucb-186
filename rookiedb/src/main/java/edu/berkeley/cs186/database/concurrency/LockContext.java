@@ -96,12 +96,13 @@ public class LockContext {
     /**
      * Throw exception if the parent lock of this context cannot grant `childType` lock.
      */
-    private void checkParentLock(String methodName, TransactionContext transaction, LockType childType) {
+    private void checkParentLock(String methodName, TransactionContext transaction,
+                                 LockType childType) {
         if (name.parent() != null) {
             LockType parentType = lockMgr.getLockType(transaction, name.parent());
             if (!LockType.canBeParentLock(parentType, childType)) {
                 throw new InvalidLockException(String.format(
-                        "%s: transaction %d wants %s lock on %s but its parent has %s lock.",
+                        "%s: transaction %d wants to get a %s lock on %s, but its parent has %s lock.",
                         methodName, transaction.getTransNum(), childType, name, parentType));
             }
         }
@@ -119,11 +120,11 @@ public class LockContext {
 
     /**
      * Acquire a `lockType` lock, for transaction `transaction`.
-     *
+     * <p>
      * Note: you must make any necessary updates to numChildLocks, or else calls
      * to LockContext#getNumChildren will not work properly.
      *
-     * @throws InvalidLockException if the request is invalid
+     * @throws InvalidLockException          if the request is invalid
      * @throws DuplicateLockRequestException if a lock is already held by the transaction.
      * @throws UnsupportedOperationException if context is readonly
      */
@@ -132,11 +133,12 @@ public class LockContext {
         String methodName = "LockContext#acquire";
         checkReadOnly(methodName);
         checkParentLock(methodName, transaction, lockType);
+        lockMgr.checkDuplicateLockRequest(methodName, transaction, name);
 
         if (hasSIXAncestor(transaction) && (lockType == LockType.S || lockType == LockType.IS)) {
             throw new InvalidLockException(String.format(
-                    "Transaction %d acquires an %s lock on %s but an ancestor has SIX.",
-                    transaction.getTransNum(), name, lockType));
+                    "%s: transaction %d acquires a %s lock on %s, but an ancestor has a SIX lock.",
+                    methodName, transaction.getTransNum(), lockType, name));
         }
 
         lockMgr.acquire(transaction, name, lockType);
@@ -145,24 +147,26 @@ public class LockContext {
 
     /**
      * Release `transaction`'s lock on `name`.
-     *
+     * <p>
      * Note: you *must* make any necessary updates to numChildLocks, or
      * else calls to LockContext#getNumChildren will not work properly.
      *
-     * @throws NoLockHeldException if no lock on `name` is held by `transaction`
-     * @throws InvalidLockException if the lock cannot be released because
-     * doing so would violate multi-granularity locking constraints
+     * @throws NoLockHeldException           if no lock on `name` is held by `transaction`
+     * @throws InvalidLockException          if the lock cannot be released because
+     *                                       doing so would violate multi-granularity
+     *                                       locking constraints
      * @throws UnsupportedOperationException if context is readonly
      */
     public void release(TransactionContext transaction)
             throws NoLockHeldException, InvalidLockException {
         String methodName = "LockContext#release";
         checkReadOnly(methodName);
+        lockMgr.checkNoLockHeld(methodName, transaction, name);
 
         if (getNumChildren(transaction) != 0) {
             throw new InvalidLockException(String.format(
-                    "Transaction %d wants to release lock on %s but has child lock.",
-                    transaction.getTransNum(), name));
+                    "%s: transaction %d wants to release lock on %s but it has child locks.",
+                    methodName, transaction.getTransNum(), name));
         }
 
         lockMgr.release(transaction, name);
@@ -173,19 +177,19 @@ public class LockContext {
      * Promote `transaction`'s lock to `newLockType`. For promotion to SIX from
      * IS/IX, all S and IS locks on descendants must be simultaneously
      * released. The helper function sisDescendants may be helpful here.
-     *
+     * <p>
      * Note: you *must* make any necessary updates to numChildLocks, or else
      * calls to LockContext#getNumChildren will not work properly.
      *
      * @throws DuplicateLockRequestException if `transaction` already has a
-     * `newLockType` lock
-     * @throws NoLockHeldException if `transaction` has no lock
-     * @throws InvalidLockException if the requested lock type is not a
-     * promotion or promoting would cause the lock manager to enter an invalid
-     * state (e.g. IS(parent), X(child)). A promotion from lock type A to lock
-     * type B is valid if B is substitutable for A and B is not equal to A, or
-     * if B is SIX and A is IS/IX/S, and invalid otherwise. hasSIXAncestor may
-     * be helpful here.
+     *                                       `newLockType` lock
+     * @throws NoLockHeldException           if `transaction` has no lock
+     * @throws InvalidLockException          if the requested lock type is not a promotion or promoting
+     *                                       would cause the lock manager to enter an invalid state (e.g.
+     *                                       IS(parent), X(child)). A promotion from lock type A to lock
+     *                                       type B is valid if B is substitutable for A and B is not equal
+     *                                       to A, or if B is SIX and A is IS/IX/S, and invalid otherwise.
+     *                                       hasSIXAncestor may be helpful here.
      * @throws UnsupportedOperationException if context is readonly
      */
     public void promote(TransactionContext transaction, LockType newLockType)
@@ -203,8 +207,8 @@ public class LockContext {
             if (hasSIXAncestor(transaction)) {
                 // throw exception if an ancestor has SIX
                 throw new InvalidLockException(String.format(
-                        "Transaction %d wants to promote %s lock to SIX but an ancestor has SIX.",
-                        transaction.getTransNum(), name));
+                        "%s: transaction %d wants to get a SIX lock on %s, but an ancestor has a SIX lock.",
+                        methodName, transaction.getTransNum(), name));
             } else {
                 // release all descendant locks of type S/IS
                 List<ResourceName> releaseNames = sisDescendants(transaction);
@@ -228,7 +232,7 @@ public class LockContext {
      * before this call must still be valid. You should only make *one* mutating
      * call to the lock manager, and should only request information about
      * TRANSACTION from the lock manager.
-     *
+     * <p>
      * For example, if a transaction has the following locks:
      *
      *                    IX(database)
@@ -246,12 +250,12 @@ public class LockContext {
      * You should not make any mutating calls if the locks held by the
      * transaction do not change (such as when you call escalate multiple times
      * in a row).
-     *
+     * <p>
      * Note: you *must* make any necessary updates to numChildLocks of all
      * relevant contexts, or else calls to LockContext#getNumChildren will not
      * work properly.
      *
-     * @throws NoLockHeldException if `transaction` has no lock at this level
+     * @throws NoLockHeldException           if `transaction` has no lock at this level
      * @throws UnsupportedOperationException if context is readonly
      */
     public void escalate(TransactionContext transaction) throws NoLockHeldException {
@@ -303,7 +307,7 @@ public class LockContext {
 
         // check if there is an explicit lock
         LockType explicit = getExplicitLockType(transaction);
-        if (explicit != LockType.NL) return explicit;
+        if (explicit != LockType.NL) return getNonIntentLock(explicit, transaction);
 
         // find the first non-NL lock on ancestors of this context
         LockContext context = parentContext();
@@ -315,13 +319,18 @@ public class LockContext {
 
         // cannot find non-NL lock, return NL
         if (context == null) return LockType.NL;
+        LockType lockType = context.getExplicitLockType(transaction);
+        return getNonIntentLock(lockType, transaction);
+    }
 
-        // check if the lock type is S, X or SIX
-        LockType type = context.getExplicitLockType(transaction);
-        if (type == LockType.S || type == LockType.SIX) {
+    /**
+     * Extract implicitly non-intent lock from the given lock.
+     */
+    private LockType getNonIntentLock(LockType lockType, TransactionContext transaction) {
+        if (lockType == LockType.S || lockType == LockType.X) {
+            return lockType;
+        } else if (lockType == LockType.SIX || hasSIXAncestor(transaction)){
             return LockType.S;
-        } else if (type == LockType.X) {
-            return LockType.X;
         } else {
             return LockType.NL;
         }
@@ -357,8 +366,9 @@ public class LockContext {
 
         // find all descendant locks that are S or IS type for this transaction
         for (Lock lock : lockMgr.getLocks(transaction)) {
-            if (lock.name.isDescendantOf(name) && (lock.lockType == LockType.S
-                    || lock.lockType == LockType.IS)) {
+            LockType type = lock.lockType;
+            if (lock.name.isDescendantOf(name)
+                    && (type == LockType.S || type == LockType.IS)) {
                 result.add(lock.name);
             }
         }

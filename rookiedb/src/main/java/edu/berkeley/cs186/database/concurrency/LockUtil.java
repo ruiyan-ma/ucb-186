@@ -11,10 +11,10 @@ import edu.berkeley.cs186.database.TransactionContext;
 public class LockUtil {
     /**
      * Ensure that the current transaction can perform actions requiring
-     * `requestType` on `lockContext`.
-     *
+     * `requestType` on `context`.
+     * <p>
      * `requestType` is guaranteed to be one of: S, X, NL.
-     *
+     * <p>
      * This method should promote/escalate/acquire as needed, but should only
      * grant the least permissive set of locks needed. We recommend that you
      * think about what to do in each of the following cases:
@@ -22,79 +22,83 @@ public class LockUtil {
      * - The current lock type is IX and the requested lock is S
      * - The current lock type is an intent lock
      * - None of the above: In this case, consider what values the explicit
-     *   lock type can be, and think about how ancestor locks will need to be
-     *   acquired or changed.
-     *
+     * lock type can be, and think about how ancestor locks will need to be
+     * acquired or changed.
+     * <p>
      * You may find it useful to create a helper method that ensures you have
      * the appropriate locks on all ancestors.
      */
-    public static void ensureSufficientLockHeld(LockContext lockContext, LockType requestType) {
+    public static void ensureSufficientLockHeld(LockContext context, LockType requestType) {
 
         // requestType must be S, X, or NL
         assert (requestType == LockType.S || requestType == LockType.X || requestType == LockType.NL);
 
-        // do nothing if the transaction or lockContext is null
+        // do nothing if the transaction or context is null
         TransactionContext transaction = TransactionContext.getTransaction();
-        if (transaction == null || lockContext == null) return;
+        if (transaction == null || context == null) return;
 
         // do nothing if the current lock type can substitute the requested type
-        LockType effectiveLock = lockContext.getEffectiveLockType(transaction);
+        LockType effectiveLock = context.getEffectiveLockType(transaction);
         if (LockType.substitutable(effectiveLock, requestType)) return;
 
-        LockType explicitLock = lockContext.getExplicitLockType(transaction);
-        if (explicitLock == LockType.IX && requestType == LockType.S) {
-            lockContext.promote(transaction, LockType.SIX);
-        } else if (explicitLock.isIntent()) {
-            // first escalate lock, then promote if not substitutable
-            lockContext.escalate(transaction);
-            explicitLock = lockContext.getExplicitLockType(transaction);
-            if (!LockType.substitutable(explicitLock, requestType)) {
-                lockContext.promote(transaction, requestType);
-            }
-        } else {
-            // ensure that we have appropriate locks on ancestors
-            ensureParentLock(transaction, lockContext.parentContext(),
-                    LockType.parentLock(requestType));
+        LockType explicitLock = context.getExplicitLockType(transaction);
 
-            // acquire or promote lock for this context
-            if (explicitLock == LockType.NL) {
-                lockContext.acquire(transaction, requestType);
-            } else {
-                lockContext.promote(transaction, requestType);
-            }
+        // if current lock is IX and request lock is S, promote to SIX
+        if (explicitLock == LockType.IX && requestType == LockType.S) {
+            ensureParentLock(transaction, context.parentContext(), LockType.IX);
+            context.promote(transaction, LockType.SIX);
+            return;
+        }
+
+        // if current lock is an intent lock, first escalate, then promote if necessary
+        if (explicitLock.isIntent()) {
+            context.escalate(transaction);
+            explicitLock = context.getExplicitLockType(transaction);
+            if (LockType.substitutable(explicitLock, requestType)) return;
+        }
+
+        // now explicit lock is a non-intent type lock (S or X)
+
+        // ensure that we have appropriate locks on ancestors
+        ensureParentLock(transaction, context.parentContext(), LockType.parentLock(requestType));
+        // acquire or promote lock for this context
+        if (explicitLock == LockType.NL) {
+            context.acquire(transaction, requestType);
+        } else {
+            context.promote(transaction, requestType);
         }
     }
 
     /**
-     * Ensure that the lock on parent has more permission than the required intent lock.
-     * That means the lock on parent can substitute the required intent lock.
-     *
-     * If the lock on parent cannot substitute the required lock, first recursively ensure
-     * that ancestors have appropriate locks, then acquire or promote lock for parent.
+     * Ensure that the lock on context has more permission than the required intent lock.
+     * That means the lock on context can substitute the required intent lock.
+     * <p>
+     * If the lock on context cannot substitute the required lock, first recursively ensure
+     * that ancestors have appropriate locks, then acquire or promote lock for context.
      */
     private static void ensureParentLock(TransactionContext transaction,
-                                         LockContext parent, LockType required) {
+                                         LockContext context, LockType required) {
         // required lock must be an intent lock
         assert (required.isIntent());
 
-        // do nothing if parent context is null
-        if (parent == null) return;
+        // do nothing if context context is null
+        if (context == null) return;
 
-        LockType currLock = parent.getExplicitLockType(transaction);
+        LockType currLock = context.getExplicitLockType(transaction);
         if (!LockType.substitutable(currLock, required)) {
             // recursively ensure that ancestors have appropriate locks
-            ensureParentLock(transaction, parent.parentContext(), required);
-            // acquire or promote lock for parent
+            ensureParentLock(transaction, context.parentContext(), required);
+            // acquire or promote lock for context
             if (currLock == LockType.NL) {
-                parent.acquire(transaction, required);
+                context.acquire(transaction, required);
             } else if (currLock.isIntent()) {
-                parent.promote(transaction, required);
+                context.promote(transaction, required);
             } else {
                 // currLock == S and required == IS --> redundant
                 // currLock == S and required == IX --> promote to SIX
                 // currLock == X and required == IS --> redundant
                 // currLock == X and required == IX --> redundant
-                parent.promote(transaction, LockType.SIX);
+                context.promote(transaction, LockType.SIX);
             }
         }
     }
