@@ -12,7 +12,7 @@ import java.util.*;
 import java.util.function.Consumer;
 
 /**
- * An record of the log.
+ * A record of the log.
  */
 public abstract class LogRecord {
     // LSN of this record, or null if not set - this is not actually

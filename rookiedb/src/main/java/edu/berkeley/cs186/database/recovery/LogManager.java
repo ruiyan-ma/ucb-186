@@ -17,7 +17,7 @@ import java.util.*;
 /**
  * The LogManager is responsible for interfacing with the log itself. The log is stored
  * on its own partition (partition 0). Since log pages are never deleted, the page number
- * is always increasing, so we assign LSNs as follow:
+ * is always increasing, so we assign LSNs as follows:
  * - page 1: [ LSN 10000, LSN 10040, LSN 10080, ...]
  * - page 2: [ LSN 20000, LSN 20030, LSN 20055, ...]
  * - page 3: [ LSN 30000, LSN 30047, LSN 30090, ...]
@@ -31,7 +31,7 @@ import java.util.*;
  * The LogManager is also responsible for writing pageLSNs onto pages and flushing the log
  * when pages are flushed, and therefore has a few methods that must be called by the buffer
  * manager when pages are fetched and evicted (fetchPageHook, fetchNewPageHook, and pageEvictHook).
- * These must be called from the buffer manager to ensure that pageLSN is up to date, and
+ * These must be called from the buffer manager to ensure that pageLSN is up-to-date, and
  * that flushedLSN >= any pageLSN on disk.
  */
 public class LogManager implements Iterable<LogRecord>, AutoCloseable {
