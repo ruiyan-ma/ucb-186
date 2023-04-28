@@ -715,8 +715,8 @@ public class TestRecoveryManager {
         // 3. Run analysis phase of recovery
         recoveryManager.restartAnalysis();
 
-        // 4 Checks for correct transaction table and
-        // transaction table after running analysis
+        // 4 Checks for correct dirty page table and transaction table after running analysis
+
         // transaction | lastLSN | touchedPages
         // ------------+---------+--------------
         //           2 |   10176 | 10000000001L
