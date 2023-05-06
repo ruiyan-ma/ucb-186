@@ -27,3 +27,6 @@ lahman.db
 hw*.zip
 *.zip
 */demo/*
+
+# ignore data
+*/data
