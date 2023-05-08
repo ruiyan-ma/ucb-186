@@ -1,5 +1,16 @@
 // Task 1i
 
-db.todo.aggregate([
-    // TODO: Write your query here
+db.keywords.aggregate([
+    {$match: 
+        {keywords: 
+            {$elemMatch: 
+                {$or: [
+                    {name: "mickey mouse"}, 
+                    {name: "marvel comic"}
+                ]}
+            }
+        }
+    },
+    {$project: {movieId: 1, _id: 0}},
+    {$sort: {movieId: 1}}
 ]);
